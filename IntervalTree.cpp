@@ -203,7 +203,164 @@ private:
         n->MaxRight = Max(n->RightEndPoint, l, r);  
     }
 
-
+    node* FindNode(ll L){
+        node* curr = Root;
+        while(curr!=nullptr){
+            if(L<curr->LeftEndPoint)
+                curr = curr->Left;
+            elif(L>curr->LeftEndPoint)
+                curr = curr->Right;
+            else
+                return curr;
+        }
+        return nullptr;
+    }
+    
+    void TransplantNode(node* target,node* replacement){
+        if(target->Parent==nullptr)
+            Root = replacement;
+        elif(target==target->Parent->Left)
+            target->Parent->Left = replacement;
+        else
+            target->Parent->Right = replacement;
+        if(replacement!=nullptr)
+            replacement->Parent = target->Parent;
+    }
+    
+    node* MinimumNode(node* curr){
+        while(curr->Left!=nullptr)
+            curr = curr->Left;
+        return curr;
+    }
+    
+    void UpdateAncestorsMaxRight(node* ancestor){
+        while(ancestor!=nullptr){
+            UpdateMaxheight(ancestor);
+            ancestor=ancestor->Parent;
+        }
+    }
+    
+    void DeleteFix(node* target){
+        while(target!=Root && !target->isRed){
+            if(target->Parent==nullptr)
+                break;
+            if(target==target->Parent->Left){
+                node* sibling = target->Parent->Right;
+                if(sibling!=nullptr && sibling->isRed){
+                    sibling->isRed = false;
+                    target->Parent->isRed = true;
+                    LeftRotate(target->Parent);
+                    sibling = target->Parent->Right;
+                }
+            if(sibling!=nullptr){
+                sibling->isRed=target->Parent->isRed;
+                if(sibling->Right!=nullptr)
+                    sibling->Right->isRed = false;
+                target->Parent->isRed = false;
+                LeftRotate(target->Parent);
+                target = Root;
+            }
+            else{
+                if(sibling->Right==nullptr || !sibling->Right->isRed){
+                    if(sibling->Left!=nullptr)
+                        sibling->Left->isRed = false;
+                    sibling->isRed = true;
+                    RightRotate(sibling);
+                    sibling = target->Parent->Right;
+                }
+                if(sibling!=nullptr){
+                    sibling->isRed=target->Parent->isRed;
+                    if(sibling->Right!=nullptr)
+                        sibling->Right->isRed = false;
+                }
+                target->Parent->isRed = false;
+                LeftRotate(target->Parent);
+                target= Root;
+                
+            }
+        }
+        
+        else{
+            node* sibling = target->Parent->Left;
+            if(sibling!=nullptr && sibling->isRed){
+                sibling->isRed = false;
+                target->Parent->isRed = true;
+                RightRotate(target->Parent);
+                sibling = target->Parent->Left;
+            }
+            if((sibling==nullptr || (sibling->Right == nullptr || !sibling->Right->isRed) && (sibling->Left==nullptr || !sibling->Left->isRed))){
+                if(sibling!=nullptr)
+                    sibling->isRed = true;
+                    target = target->Parent;
+            }
+            else{
+                if(sibling->Left==nullptr || !sibling->Left->isRed){
+                    if(sibling->Right!=nullptr)
+                        sibling->Right->isRed = false;
+                    sibling->isRed = true;
+                    LeftRotate(sibling);
+                    sibling = target->Parent->Left;
+                }
+                if(sibling!=nullptr){
+                    sibling->isRed=target->Parent->isRed;
+                    if(sibling->Left!=nullptr) 
+                        sibling->Left->isRed = false;
+                    
+                }
+                target->Parent->isRed=false;
+                RightRotate(target->Parent);
+                target=Root;
+            }
+                
+        }
+        
+        }
+        if(target!=nullptr)
+            target->isRed = false;
+    }
+    
+    void Delete(ll L,ll R){
+        node* target = FindNode(L);
+        if(target==nullptr || target->LeftEndPoint!=L || target->RightEndPoint!=R)
+            return;
+        node* replacement = target, *child = nullptr;
+        bool replacement_original_colour = replacement->isRed;
+        if(target->Left==nullptr){
+            child = target->Right;
+            TransplantNode(target,target->Right);
+            UpdateAncestorsMaxRight(target->Parent);
+        }
+        elif(target->Right==nullptr){
+            child = target->Left;
+            TransplantNode(target,target->Left);
+            UpdateAncestorsMaxRight(target->Parent);
+        }
+        else{
+            replacement = MinimumNode(target->Right);
+            replacement_original_colour = replacement->isRed;
+            child = replacement->Right;
+            if(replacement->Parent == target)
+                if(child!=nullptr) 
+                    child->Parent = replacement;
+            else{
+                TransplantNode(replacement,replacement->Right);
+                replacement->Right = target->Right;
+                if(replacement->Right!=nullptr)
+                    replacement->Right->Parent = replacement;
+                UpdateAncestorsMaxRight(replacement->Parent);
+            }        
+            TransplantNode(target,replacement);
+            replacement->Left = target->Left;
+            if(replacement->Left!=nullptr) 
+                replacement->Left->Parent = replacement;
+            replacement->isRed = target->isRed;
+            UpdateAncestorsMaxRight(replacement);
+        }
+        if(!replacement_original_colour)
+            DeleteFix(child);
+        delete target;    
+    }
+    
     void  Inordertraversal(node* r) const
     {
         if(!r)  return;
@@ -215,6 +372,8 @@ private:
         Inordertraversal(r->Right);
     }
 
+    
+
 public:
     IntervalTree()
     {
@@ -225,6 +384,11 @@ public:
     void   insert(ll L, ll R)
     {
         Insert(L,R);
+    }
+
+    void remove(ll L, ll R)
+    {
+        Delete(L,R);
     }
 
     void Inordertraversal()
@@ -246,6 +410,13 @@ int main()
     T.insert(13,21);
     T.insert(12,33);
 
+    cout<<"Before deletion:"<<endl;
+    T.Inordertraversal();
+
+    T.remove(19,20);
+    T.remove(25,30);
+
+    cout<<"After deletion:"<<endl;
     T.Inordertraversal();
 
     return 0;
