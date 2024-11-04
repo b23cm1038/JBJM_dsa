@@ -319,44 +319,52 @@ private:
             target->isRed = false;
     }
     
-    void Delete(ll L,ll R){
+    void Delete(ll L, ll R) {
         node* target = FindNode(L);
-        if(target==nullptr || target->LeftEndPoint!=L || target->RightEndPoint!=R)
+        if(target == nullptr || target->LeftEndPoint != L || target->RightEndPoint != R)
             return;
+        
+        // Open the file in append mode
+        ofstream file("deleted_tasks.txt", ios::app);
+        if (file.is_open()) {
+            file << "LeftEndPoint: " << target->LeftEndPoint << ", RightEndPoint: " << target->RightEndPoint << "\n";
+            file.close();
+        } else {
+            cout << "Unable to open file";
+        }
+        
         node* replacement = target, *child = nullptr;
         bool replacement_original_colour = replacement->isRed;
-        if(target->Left==nullptr){
+        if (target->Left == nullptr) {
             child = target->Right;
-            TransplantNode(target,target->Right);
+            TransplantNode(target, target->Right);
             UpdateAncestorsMaxRight(target->Parent);
-        }
-        elif(target->Right==nullptr){
+        } else if (target->Right == nullptr) {
             child = target->Left;
-            TransplantNode(target,target->Left);
+            TransplantNode(target, target->Left);
             UpdateAncestorsMaxRight(target->Parent);
-        }
-        else{
+        } else {
             replacement = MinimumNode(target->Right);
             replacement_original_colour = replacement->isRed;
             child = replacement->Right;
-            if(replacement->Parent == target)
-                if(child!=nullptr) 
+            if (replacement->Parent == target) {
+                if (child != nullptr) 
                     child->Parent = replacement;
-            else{
-                TransplantNode(replacement,replacement->Right);
+            } else {
+                TransplantNode(replacement, replacement->Right);
                 replacement->Right = target->Right;
-                if(replacement->Right!=nullptr)
+                if (replacement->Right != nullptr)
                     replacement->Right->Parent = replacement;
                 UpdateAncestorsMaxRight(replacement->Parent);
             }        
-            TransplantNode(target,replacement);
+            TransplantNode(target, replacement);
             replacement->Left = target->Left;
-            if(replacement->Left!=nullptr) 
+            if (replacement->Left != nullptr) 
                 replacement->Left->Parent = replacement;
             replacement->isRed = target->isRed;
             UpdateAncestorsMaxRight(replacement);
         }
-        if(!replacement_original_colour)
+        if (!replacement_original_colour)
             DeleteFix(child);
         delete target;    
     }
