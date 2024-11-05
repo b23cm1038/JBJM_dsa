@@ -379,8 +379,49 @@ private:
         // (r->isRed) ? cout << "R" << endl : cout << "B" << endl;
         Inordertraversal(r->Right);
     }
+   bool doOverlap(ll L1, ll R1, ll L2, ll R2) {
+        return L1 <= R2 && L2 <= R1;
+    }
+     node* GetPriorityInterval(node* curr, ll L, ll R, ll &minRange) {
+    if (!curr) return nullptr;
 
+    node* priorityInterval = nullptr;
+
+    if (doOverlap(L, R, curr->LeftEndPoint, curr->RightEndPoint)) {
+        ll currRange = curr->RightEndPoint - curr->LeftEndPoint;
+        if (currRange < minRange) {
+            minRange = currRange;
+            priorityInterval = curr;
+        }
+    }
+
+    // Check left and right children if they might contain overlapping intervals
+    if (curr->Left && curr->Left->MaxRight >= L) {
+        node* leftPriority = GetPriorityInterval(curr->Left, L, R, minRange);
+        if (leftPriority) priorityInterval = leftPriority;
+    }
     
+    node* rightPriority = GetPriorityInterval(curr->Right, L, R, minRange);
+    if (rightPriority) priorityInterval = rightPriority;
+
+    return priorityInterval;
+}
+    node* overlapSearch(node* root, ll L, ll R) {
+        if (!root) {
+            return nullptr;
+        }
+        // Check if the current node’s interval overlaps with the given interval
+        if (doOverlap(root->LeftEndPoint, root->RightEndPoint, L, R)) {
+            return root;
+        }
+        // If left child exists and its MaxRight endpoint is greater or equal to the lower bound of the query interval
+        if (root->Left && root->Left->MaxRight >= L) {
+            return overlapSearch(root->Left, L, R);
+        }
+
+        // Recur on the right child otherwise
+        return overlapSearch(root->Right, L, R);
+    }
 
 public:
     IntervalTree()
@@ -403,6 +444,14 @@ public:
     {
         Inordertraversal(Root);
     }
+    node* getPriorityInterval(ll L, ll R) {
+        ll minRange = LLONG_MAX;
+        return GetPriorityInterval(Root, L, R, minRange);
+    }
+
+  node* searchOverlap(ll L, ll R) {
+        return overlapSearch(Root, L, R);
+    }
 };
 
 
@@ -417,6 +466,13 @@ int main()
     T.insert(56,70);
     T.insert(13,21);
     T.insert(12,33);
+
+   auto priorityInterval = T.getPriorityInterval(16, 18);
+    if (priorityInterval) {
+    cout << "Priority Interval: (" << priorityInterval->LeftEndPoint << ", " << priorityInterval->RightEndPoint << ")" << endl;
+   } else {
+    cout << "No overlapping interval found." << endl;
+   }
 
     cout<<"Before deletion:"<<endl;
     T.Inordertraversal();
