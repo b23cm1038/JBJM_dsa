@@ -1,7 +1,7 @@
 import streamlit as st
 
 # Hardcoded file path
-FILE_PATH = '/Users/bappa123/Desktop/jbjm.txt'
+FILE_PATH = 'deleted_tasks'
 
 def load_tasks(file_path):
     tasks = []
