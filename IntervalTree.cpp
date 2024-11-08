@@ -25,43 +25,37 @@ class IntervalTree
 private:
     class node
     {
-        public:
+    public:
+        ll LeftEndPoint, RightEndPoint, MaxRight;
+        bool Priority, isRed;
+        int A, B, C, D, E;
+        node *Parent, *Left, *Right;
 
-            ll LeftEndPoint;
-            ll RightEndPoint;
-            ll MaxRight = 0;
-            ll Priority;
-            node* Parent;
-            node* Left;
-            node* Right;
-            bool isRed ;
-
-        node(ll L, ll R)
+        node(ll L, ll R, bool preference, int j) 
+            : LeftEndPoint(L), RightEndPoint(R), Priority(preference), MaxRight(R), 
+              Parent(nullptr), Left(nullptr), Right(nullptr), isRed(true)
         {
-            LeftEndPoint = L;
-            RightEndPoint = R;
-            Left = nullptr;
-            Right = nullptr;
-            Parent = nullptr;
-            //all new nodes are red when created because it is easier to solve double red problem than black depth problem
-            isRed = true;
+            A = (j == 1);
+            B = (j == 2);
+            C = (j == 3);
+            D = (j == 4);
+            E = (j == 5);
         }
-
     };
 
-    node* CreateNode(ll L, ll R)
+    node* CreateNode(ll L, ll R,bool preference,int j)
     {
-        return new node(L,R);
+        return new node(L,R,preference,j);
     }
 
     node* Root;
 
-    void Insert(ll L, ll R)
+    void Insert(ll L, ll R,bool preference,int j)
     {
         //simple BST insertion by comparing leftendpoints
         node* x = Root;
         node* y = nullptr;
-        node* z = CreateNode(L,R);
+        node* z = CreateNode(L,R,preference,j);
 
         while(x)
         {
@@ -369,11 +363,17 @@ private:
         delete target;    
     }
     
-    void  Inordertraversal(node* r) const
+   void  Inordertraversal(node* r) const
     {
         if(!r)  return;
         Inordertraversal(r->Left);
         cout << "LeftEndPoint:" << r->LeftEndPoint << ' ' << "RightEndPoint:" << r->RightEndPoint << ' '  << "MaxRightEndpoint:" << r->MaxRight << ' ';
+        if (r->A != 0) cout << "A: " << r->A << " ";
+    if (r->B != 0) cout << "B: " << r->B << " ";
+    if (r->C != 0) cout << "C: " << r->C << " ";
+    if (r->D != 0) cout << "D: " << r->D << " ";
+    if (r->E != 0) cout << "E: " << r->E << " ";
+
         (r->isRed) ? cout << "R" << endl : cout << "B" << endl;
         // cout << "LeftEndPoint:" << r->LeftEndPoint << ' ';
         // (r->isRed) ? cout << "R" << endl : cout << "B" << endl;
@@ -430,9 +430,9 @@ public:
     }
     ~IntervalTree() {}
 
-    void   insert(ll L, ll R)
+    void   insert(ll L, ll R,bool preference,int j)
     {
-        Insert(L,R);
+        Insert(L,R,preference,j);
     }
 
     void remove(ll L, ll R)
@@ -452,33 +452,103 @@ public:
   node* searchOverlap(ll L, ll R) {
         return overlapSearch(Root, L, R);
     }
+  void checkAndModifyInterval(node*curr,ll L, ll R, vector<bool>&overlapArray,vector<node*>&overlappingnodes){
+      if(!curr) return;
+      
+      if (doOverlap(L, R, curr->LeftEndPoint, curr->RightEndPoint)){
+        node* overlapNode = curr;  
+        if (overlapNode->A != 0) overlapArray[0] = true;
+        if (overlapNode->B != 0) overlapArray[1] = true;
+        if (overlapNode->C != 0) overlapArray[2] = true;
+        if (overlapNode->D != 0) overlapArray[3] = true;
+        if (overlapNode->E != 0) overlapArray[4] = true;
+        if(!overlapNode->Priority) overlappingnodes.push_back(overlapNode);
+      }
+      if (curr->Left && curr->Left->MaxRight >= L){
+         checkAndModifyInterval(curr->Left,L,R,overlapArray,overlappingnodes); 
+      }
+      checkAndModifyInterval(curr->Right,L,R,overlapArray,overlappingnodes);
+      return;
+  }
+ 
+ void usingCheckAndModify(ll L, ll R){
+     vector<bool>overlapArray(5,false);
+     vector<node*>overlappingnodes;
+     checkAndModifyInterval(this->Root,L,R,overlapArray,overlappingnodes);
+     for (int i = 0; i < 5; i++) {
+        if (!overlapArray[i]) {
+            // If a corresponding value is still false, insert a new node for that
+            Insert(L, R, true, i + 1); // 1 for A, 2 for B, etc.
+            
+            std::cout << "Inserting new interval: [" << L << ", " << R << "] for ";
+            if (i == 0) std::cout << "A";
+            else if (i == 1) std::cout << "B";
+            else if (i == 2) std::cout << "C";
+            else if (i == 3) std::cout << "D";
+            else if (i == 4) std::cout << "E";
+            std::cout << std::endl;
+            return;
+        }
+    }
+    if(overlappingnodes.size() !=0){
+       auto overlapNode= overlappingnodes[0];
+       std::cout << "Deleting lower-priority node: "
+                          << "LeftEndPoint = " << overlapNode->LeftEndPoint
+                          << ", RightEndPoint = " << overlapNode->RightEndPoint << " worker ";
+    if (overlapNode->A != 0) {cout << "A: " << overlapNode->A << endl;
+        Insert(L,R,true,1);
+        Delete(overlapNode->LeftEndPoint,overlapNode->RightEndPoint);
+        return;
+    }
+    if (overlapNode->B != 0) {cout << "B: " << overlapNode->B << endl;
+        Insert(L,R,true,2);
+        Delete(overlapNode->LeftEndPoint,overlapNode->RightEndPoint);
+        return;
+    }
+    if (overlapNode->C != 0) {cout << "C: " << overlapNode->C << endl;
+        Insert(L,R,true,3);
+        Delete(overlapNode->LeftEndPoint,overlapNode->RightEndPoint);
+        return;
+    }
+    if (overlapNode->D != 0) {cout << "D: " << overlapNode->D << endl;
+       
+        Delete(overlapNode->LeftEndPoint,overlapNode->RightEndPoint);
+         Insert(L,R,true,4);
+        return;
+    }
+    if (overlapNode->E != 0) {cout << "E: " << overlapNode->E << endl;
+        Insert(L,R,true,5);
+        Delete(overlapNode->LeftEndPoint,overlapNode->RightEndPoint);
+        return;
+    }
+    
+         
+                          
+    }
+    else{
+        cout<<"This interval cannot be inserted"<<endl;
+        return;
+    }
+    
+ } 
 };
 
 
 int main()
 {
-    IntervalTree    T;
+   IntervalTree    T;
     //sample input
-    T.insert(16,25);
-    T.insert(25,30);
-    T.insert(14,19);
-    T.insert(19,20);
-    T.insert(56,70);
-    T.insert(13,21);
-    T.insert(12,33);
-
-   auto priorityInterval = T.getPriorityInterval(16, 18);
-    if (priorityInterval) {
-    cout << "Priority Interval: (" << priorityInterval->LeftEndPoint << ", " << priorityInterval->RightEndPoint << ")" << endl;
-   } else {
-    cout << "No overlapping interval found." << endl;
-   }
+    
+    T.insert(91,100,true,1);
+    T.insert(92,100,true,2);
+    T.insert(93,100,true,3);
+    T.insert(94,100,false,4);
+    T.insert(95,100,true,5);
 
     cout<<"Before deletion:"<<endl;
     T.Inordertraversal();
-
-    T.remove(19,20);
-    T.remove(25,30);
+    T.usingCheckAndModify(97,101) ;
+    
 
     cout<<"After deletion:"<<endl;
     T.Inordertraversal();
