@@ -1,4 +1,6 @@
 #include<bits/stdc++.h>
+#include"C:\Users\varap\OneDrive\Desktop\dsa project test\cpp-httplib\httplib.h"
+#include<mutex>
 using namespace std;
 
 #define ll  long long 
@@ -19,6 +21,8 @@ ll Max(ll a, ll b, ll c)
     }
 }
 
+int n;
+
 //using RB tree to implement IntervalTree
 class IntervalTree
 {
@@ -27,11 +31,12 @@ private:
     {
     public:
         ll LeftEndPoint, RightEndPoint, MaxRight;
-        bool Priority, isRed;
+        int
+         Priority, isRed;
         int id;
         node *Parent, *Left, *Right;
 
-        node(ll L, ll R, bool preference, int j) 
+        node(ll L, ll R, int preference, int j) 
             : LeftEndPoint(L), RightEndPoint(R), Priority(preference), MaxRight(R), 
               Parent(nullptr), Left(nullptr), Right(nullptr), isRed(true),id(j)
         {
@@ -39,14 +44,14 @@ private:
         }
     };
 
-    node* CreateNode(ll L, ll R,bool preference,int j)
+    node* CreateNode(ll L, ll R,int preference,int j)
     {
         return new node(L,R,preference,j);
     }
 
     node* Root;
 
-    void Insert(ll L, ll R,bool preference,int j)
+    void Insert(ll L, ll R,int preference,int j)
     {
         //simple BST insertion by comparing leftendpoints
         node* x = Root;
@@ -371,6 +376,15 @@ private:
         // (r->isRed) ? cout << "R" << endl : cout << "B" << endl;
         Inordertraversal(r->Right);
     }
+
+    void InorderTraversalToString(node* r, stringstream& ss) const
+    {
+        if (!r) return;
+        InorderTraversalToString(r->Left, ss);
+        ss << "ID: " << r->id << " | Interval: [" << r->LeftEndPoint << ", " << r->RightEndPoint << "] | MaxRight: " << r->MaxRight << "\n";
+        InorderTraversalToString(r->Right, ss);
+    }
+
    bool doOverlap(ll L1, ll R1, ll L2, ll R2) {
         return L1 <= R2 && L2 <= R1;
     }
@@ -416,20 +430,82 @@ private:
     }
 
 public:
+
+    mutex treeMutex;
+
     IntervalTree()
     {
         Root = nullptr;
     }
     ~IntervalTree() {}
 
-    void   insert(ll L, ll R,bool preference,int j)
+    void   insert(ll L, ll R,int preference,int j)
     {
+        lock_guard<mutex> guard(treeMutex);
         Insert(L,R,preference,j);
+    }
+
+    string getInorderIntervals()
+    {
+        lock_guard<mutex> guard(treeMutex);
+        stringstream ss;
+        InorderTraversalToString(Root, ss);
+        return ss.str();
+    }
+
+    void StartServer()
+    {
+        httplib::Server svr;
+
+        // Endpoint to insert an interval
+        svr.Post("/insert", [this](const httplib::Request& req, httplib::Response& res) {
+            ll L = stoll(req.get_param_value("L"));
+            ll R = stoll(req.get_param_value("R"));
+            ll Priority = stoll(req.get_param_value("Priority"));
+            ll id = stoll(req.get_param_value("id"));
+            //change needed here for insert function parameters!!!
+            this->insert(L, R, Priority, id);
+
+            res.set_content("Interval inserted successfully\n", "text/plain");
+        });
+
+         svr.Post("/delete", [this](const httplib::Request& req, httplib::Response& res) {
+            ll L1 = stoll(req.get_param_value("L1"));
+            ll R1 = stoll(req.get_param_value("R1"));
+            
+            this->remove(L1, R1);
+
+            res.set_content("Interval deleted successfully\n", "text/plain");
+         });
+
+        
+
+        svr.Get("/get_inorder", [this](const httplib::Request& req, httplib::Response& res) {
+            res.set_content(this->getInorderIntervals(), "text/plain");
+        });
+
+        svr.Post("/set_n", [](const httplib::Request& req, httplib::Response& res) {
+            if (req.has_param("n")) {
+                n = std::stoi(req.get_param_value("n"));
+                res.set_content("Number of employees set to " + std::to_string(n) + "\n", "text/plain");
+
+                cout << n << endl;
+            } else {
+                res.status = 400;
+                res.set_content("Missing parameter 'n'\n", "text/plain");
+            }
+        });
+
+        cout << "Server started at http://localhost:8080" << endl;
+        svr.listen("localhost", 8080);
     }
 
     void remove(ll L, ll R)
     {
+        Inordertraversal(Root);
+        lock_guard<mutex> guard(treeMutex);
         Delete(L,R);
+        Inordertraversal(Root);
     }
 
     void Inordertraversal()
@@ -450,13 +526,24 @@ public:
       if (doOverlap(L, R, curr->LeftEndPoint, curr->RightEndPoint)){
         node* overlapNode = curr;  
         overlapArray[overlapNode->id - 1] = true;
-        if(!overlapNode->Priority) overlappingnodes.push_back(overlapNode);
+        if(overlapNode->Priority==0){
+            bool is_blocked = false;
+            for(node* existingNode:overlappingnodes){
+                if(doOverlap(existingNode->LeftEndPoint,existingNode->RightEndPoint,overlapNode->LeftEndPoint,overlapNode->RightEndPoint) && existingNode->Priority>overlapNode->Priority){
+                    is_blocked=true;
+                    break;
+                }
+            }
+            if(!is_blocked)
+                overlappingnodes.push_back(overlapNode);
+        }
+
+        
       }
       if (curr->Left && curr->Left->MaxRight >= L){
          checkAndModifyInterval(curr->Left,L,R,overlapArray,overlappingnodes,n); 
       }
       checkAndModifyInterval(curr->Right,L,R,overlapArray,overlappingnodes,n);
-      return;
   }
  
  void usingCheckAndModify(ll L, ll R,int n){
@@ -497,21 +584,23 @@ public:
 int main()
 {
    IntervalTree    T;
+   T.StartServer();
     //sample input
-    int n = 5;
-    T.insert(91,100,true,1);
-    T.insert(92,100,true,2);
-    T.insert(93,100,true,3);
-    T.insert(94,100,false,4);
-    T.insert(95,100,true,5);
+    //int n = 5;
+    // svr.Post("/set_n", set_n_handler);
+//    T.insert(91,100,1,1);
+//    T.insert(92,100,2,2);
+//    T.insert(93,100,2,3);
+//    T.insert(94,100,0,4);
+//    T.insert(95,100,1,5);
 
-    cout<<"Before Adding new intervals:"<<endl;
-    T.Inordertraversal();
-    T.usingCheckAndModify(97,101,n) ;
-    T.usingCheckAndModify(102,104,n);
-    T.usingCheckAndModify(89,92,n);
-    cout<<"After addition:"<<endl;
-    T.Inordertraversal();
+    //cout<<"Before Adding new intervals:"<<endl;
+    //T.Inordertraversal();
+    //T.usingCheckAndModify(101,110,n) ;
+   // T.usingCheckAndModify(102,104,n);
+ //   T.usingCheckAndModify(89,92,n);
+    //cout<<"After addition:"<<endl;
+    //T.Inordertraversal();
 
     return 0;
 }
