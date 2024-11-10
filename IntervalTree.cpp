@@ -1,6 +1,7 @@
 #include<bits/stdc++.h>
 #include"C:\Users\varap\OneDrive\Desktop\dsa project test\cpp-httplib\httplib.h"
 #include<mutex>
+
 using namespace std;
 
 #define ll  long long 
@@ -21,7 +22,7 @@ ll Max(ll a, ll b, ll c)
     }
 }
 
-int n;
+int n, cnt = 0;
 
 //using RB tree to implement IntervalTree
 class IntervalTree
@@ -31,8 +32,8 @@ private:
     {
     public:
         ll LeftEndPoint, RightEndPoint, MaxRight;
-        int
-         Priority, isRed;
+        int Priority; 
+        bool isRed;
         int id;
         node *Parent, *Left, *Right;
 
@@ -364,7 +365,7 @@ private:
         delete target;    
     }
     
-   void  Inordertraversal(node* r) const
+    void  Inordertraversal(node* r) const
     {
         if(!r)  return;
         Inordertraversal(r->Left);
@@ -380,15 +381,20 @@ private:
     void InorderTraversalToString(node* r, stringstream& ss) const
     {
         if (!r) return;
+
         InorderTraversalToString(r->Left, ss);
-        ss << "ID: " << r->id << " | Interval: [" << r->LeftEndPoint << ", " << r->RightEndPoint << "] | MaxRight: " << r->MaxRight << "\n";
+        
+    ss << "ID: " << r->id 
+       << " | Interval: [" << r->LeftEndPoint << ", " << r->RightEndPoint << "]"
+       << " | Priority: " << r->Priority << "\n";
+
         InorderTraversalToString(r->Right, ss);
     }
 
-   bool doOverlap(ll L1, ll R1, ll L2, ll R2) {
+    bool doOverlap(ll L1, ll R1, ll L2, ll R2) {
         return L1 <= R2 && L2 <= R1;
     }
-     node* GetPriorityInterval(node* curr, ll L, ll R, ll &minRange) {
+    node* GetPriorityInterval(node* curr, ll L, ll R, ll &minRange) {
     if (!curr) return nullptr;
 
     node* priorityInterval = nullptr;
@@ -439,10 +445,11 @@ public:
     }
     ~IntervalTree() {}
 
-    void   insert(ll L, ll R,int preference,int j)
+    void   insert(ll L, ll R,int preference)
     {
+        cnt++;
         lock_guard<mutex> guard(treeMutex);
-        Insert(L,R,preference,j);
+        cnt > n ? usingCheckAndModify(L,R,preference,n) : Insert(L,R,preference,cnt);
     }
 
     string getInorderIntervals()
@@ -462,9 +469,9 @@ public:
             ll L = stoll(req.get_param_value("L"));
             ll R = stoll(req.get_param_value("R"));
             ll Priority = stoll(req.get_param_value("Priority"));
-            ll id = stoll(req.get_param_value("id"));
+            //ll id = stoll(req.get_param_value("id"));
             //change needed here for insert function parameters!!!
-            this->insert(L, R, Priority, id);
+            this->insert(L, R, Priority);
 
             res.set_content("Interval inserted successfully\n", "text/plain");
         });
@@ -478,23 +485,33 @@ public:
             res.set_content("Interval deleted successfully\n", "text/plain");
          });
 
+         svr.Post("/Modify", [this](const httplib::Request& req, httplib::Response& res) {
+            ll L2 = stoll(req.get_param_value("L2"));
+            ll R2 = stoll(req.get_param_value("R2"));
+            ll L3 = stoll(req.get_param_value("L3"));
+            ll R3 = stoll(req.get_param_value("R3"));
+            int P = stoll(req.get_param_value("P"));
+            
+            this->modify(L2, R2, L3, R3, P);
+
+            res.set_content("Interval modified successfully\n", "text/plain");
+         });
+
         
 
         svr.Get("/get_inorder", [this](const httplib::Request& req, httplib::Response& res) {
             res.set_content(this->getInorderIntervals(), "text/plain");
         });
 
-        svr.Post("/set_n", [](const httplib::Request& req, httplib::Response& res) {
+            svr.Post("/set_n", [](const httplib::Request& req, httplib::Response& res) {
             if (req.has_param("n")) {
                 n = std::stoi(req.get_param_value("n"));
                 res.set_content("Number of employees set to " + std::to_string(n) + "\n", "text/plain");
-
-                cout << n << endl;
             } else {
                 res.status = 400;
                 res.set_content("Missing parameter 'n'\n", "text/plain");
             }
-        });
+            });
 
         cout << "Server started at http://localhost:8080" << endl;
         svr.listen("localhost", 8080);
@@ -502,14 +519,15 @@ public:
 
     void remove(ll L, ll R)
     {
-        Inordertraversal(Root);
+        //Inordertraversal(Root);
         lock_guard<mutex> guard(treeMutex);
         Delete(L,R);
-        Inordertraversal(Root);
+        //Inordertraversal(Root);
     }
 
     void Inordertraversal()
     {
+        lock_guard<mutex> guard(treeMutex);
         Inordertraversal(Root);
     }
     node* getPriorityInterval(ll L, ll R) {
@@ -520,56 +538,55 @@ public:
   node* searchOverlap(ll L, ll R) {
         return overlapSearch(Root, L, R);
     }
-  void checkAndModifyInterval(node*curr,ll L, ll R, vector<bool>&overlapArray,vector<node*>&overlappingnodes,int n){
+  void checkAndModifyInterval(node*curr,ll L, ll R, vector<bool>&overlapArray,vector<node*>&overlappingnodes,int priority,int n){
       if(!curr) return;
       
       if (doOverlap(L, R, curr->LeftEndPoint, curr->RightEndPoint)){
         node* overlapNode = curr;  
-        overlapArray[overlapNode->id - 1] = true;
-        if(overlapNode->Priority==0){
-            bool is_blocked = false;
-            for(node* existingNode:overlappingnodes){
-                if(doOverlap(existingNode->LeftEndPoint,existingNode->RightEndPoint,overlapNode->LeftEndPoint,overlapNode->RightEndPoint) && existingNode->Priority>overlapNode->Priority){
-                    is_blocked=true;
-                    break;
-                }
-            }
-            if(!is_blocked)
+         overlapArray[overlapNode->id - 1] = true;
+        if(overlapNode->Priority<priority){   
                 overlappingnodes.push_back(overlapNode);
         }
 
         
       }
       if (curr->Left && curr->Left->MaxRight >= L){
-         checkAndModifyInterval(curr->Left,L,R,overlapArray,overlappingnodes,n); 
+         checkAndModifyInterval(curr->Left,L,R,overlapArray,overlappingnodes,priority,n); 
       }
-      checkAndModifyInterval(curr->Right,L,R,overlapArray,overlappingnodes,n);
+      checkAndModifyInterval(curr->Right,L,R,overlapArray,overlappingnodes,priority,n);
+      return;
   }
  
- void usingCheckAndModify(ll L, ll R,int n){
+ void usingCheckAndModify(ll L, ll R,int priority,int n){
      vector<bool>overlapArray(n,false);
      vector<node*>overlappingnodes;
-     checkAndModifyInterval(this->Root,L,R,overlapArray,overlappingnodes,n);
+     checkAndModifyInterval(this->Root,L,R,overlapArray,overlappingnodes,priority,n);
      for (int i = 0; i < n; i++) {
         if (!overlapArray[i]) {
             // If a corresponding value is still false, insert a new node for that
-            Insert(L, R, true, i + 1); // 1 for A, 2 for B, etc.
+            Insert(L, R, priority, i + 1);
             
-            std::cout << "Inserting new interval: [" << L << ", " << R << "] for ";
+            cout << "Inserting new interval: [" << L << ", " << R << "] with priority "<< priority<<" for worker ";
             cout<<i+1;
-            std::cout << std::endl;
+            cout << endl;
+
             return;
         }
     }
-    if(overlappingnodes.size() !=0){
+    if(!overlappingnodes.empty()){
+        sort(overlappingnodes.begin(), overlappingnodes.end(),[](node* a, node* b){return a->Priority < b->Priority;});
+
        auto overlapNode= overlappingnodes[0];
-       std::cout << "Deleting lower-priority node: "
-                          << "LeftEndPoint = " << overlapNode->LeftEndPoint
-                          << ", RightEndPoint = " << overlapNode->RightEndPoint << " worker ";
-     cout <<  overlapNode->id << endl;
-        Insert(L,R,true,overlapNode->id);
-        Delete(overlapNode->LeftEndPoint,overlapNode->RightEndPoint);
-        return;
+        
+        std::cout << "Deleting lower-priority node: "
+                            << "LeftEndPoint = " << overlapNode->LeftEndPoint
+                            << ", RightEndPoint = " << overlapNode->RightEndPoint << " worker ";
+            cout <<  overlapNode->id << endl;
+            Insert(L,R,priority,overlapNode->id);
+            Delete(overlapNode->LeftEndPoint,overlapNode->RightEndPoint);
+            return;
+        
+    
     
     }
     else{
@@ -578,29 +595,63 @@ public:
     }
     
  } 
-};
 
+ void modify(ll left,ll right, ll L ,ll R,int p){
+    // node* rescheduling = FindNode(left);
+    // Insert(L,R,p,cnt);
+    // Delete(left,right);
+    return;
+ } 
+};
 
 int main()
 {
-   IntervalTree    T;
-   T.StartServer();
+    IntervalTree    T;
+    T.StartServer();
     //sample input
     //int n = 5;
-    // svr.Post("/set_n", set_n_handler);
-//    T.insert(91,100,1,1);
-//    T.insert(92,100,2,2);
-//    T.insert(93,100,2,3);
-//    T.insert(94,100,0,4);
-//    T.insert(95,100,1,5);
+    //svr.Post("/set_n", set_n_handler);
+    
+    // T.insert(91,100,1,1);
+    // T.insert(92,100,2,2);
+    // T.insert(93,100,2,3);
+    // T.insert(94,100,0,4);
+    // T.insert(95,100,1,5);
 
-    //cout<<"Before Adding new intervals:"<<endl;
-    //T.Inordertraversal();
-    //T.usingCheckAndModify(101,110,n) ;
-   // T.usingCheckAndModify(102,104,n);
- //   T.usingCheckAndModify(89,92,n);
-    //cout<<"After addition:"<<endl;
-    //T.Inordertraversal();
+    // cout<<"Before Adding new intervals:"<<endl;
+    // T.Inordertraversal();
+    // T.usingCheckAndModify(101,110,n);
+    // T.usingCheckAndModify(102,104,n);
+    // T.usingCheckAndModify(89,92,n);
+    // cout<<"After addition:"<<endl;
+    // T.Inordertraversal();
 
     return 0;
 }
+
+// int main() {
+//     IntervalTree T;
+
+//     // Sample input - Insert initial intervals with start, end, priority, and task ID
+//     int n = 5;
+//     T.insert(91, 100, 1, 1);  // Interval 1: [91,100] with priority 1 and task ID 1
+//     T.insert(92, 100, 2, 2);  // Interval 2: [92,100] with priority 2 and task ID 2
+//     T.insert(93, 100, 2, 3);  // Interval 3: [93,100] with priority 2 and task ID 3
+//     T.insert(94, 100, 0, 4);  // Interval 4: [94,100] with priority 0 and task ID 4
+//     T.insert(95, 100, 1, 5);  // Interval 5: [95,100] with priority 1 and task ID 5
+
+//     // Display the intervals before adding new intervals
+//     cout << "Before Adding new intervals:" << endl;
+//     T.Inordertraversal();  // Assuming this function prints the intervals
+
+//     // Adding new intervals with `usingCheckAndModify`, now with priority as the third parameter
+//     T.usingCheckAndModify(101, 110, 1, n);  // New interval [101,110] with priority 1
+//     T.usingCheckAndModify(102, 104, 2, n);  // New interval [102,104] with priority 2
+//     T.usingCheckAndModify(89, 92, 1, n);   // New interval [89,92] with priority 1
+
+//     // Display the intervals after adding new intervals
+//     cout << "After addition:" << endl;
+//     T.Inordertraversal();  // Assuming this function prints the updated intervals
+
+//     return 0;
+// }
